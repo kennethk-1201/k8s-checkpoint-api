@@ -1,0 +1,78 @@
+openapi: 3.0.0
+info:
+  title: Example API
+  description: This is a basic example of an OpenAPI specification.
+  version: 1.0.0
+  contact:
+    name: API Support
+    url: https://example.com/support
+    email: support@example.com
+servers:
+  - url: https://<NODE-IP>/v1
+
+paths:
+  /checkpoint:
+    get:
+      summary: Retrieves a checkpoint archive.
+      description: Returns the checkpoint archive.
+      parameters:
+      - name: namespace
+        in: path
+        description: Namespace of the Pod.
+        required: true
+        schema:
+          type: string
+      - name: pod
+        in: path
+        description: Name of the Pod.
+        required: true
+        schema:
+          type: string
+      - name: container
+        in: path
+        description: Name of the container image.
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Archive was downloaded.
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+
+
+    post:
+      summary: Checkpoints a container
+      description: Creates a new user with the provided data.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                namespace:
+                  type: string
+                  example: kenneth
+                pod:
+                  type: string
+                  example: webserver
+                container:
+                  type: string
+                  example: nginx
+                timeout:
+                  type: string
+                  example: 
+                  description: >
+                    Timeout in seconds to wait until the checkpoint creation is finished. If zero or no timeout is 
+                    specified the default CRI timeout value will be used. Checkpoint creation time depends directly 
+                    on the used memory of the container. The more memory a container uses the more time is required 
+                    to create the corresponding checkpoint.
+      responses:
+        '200':
+          description: Container was checkpointed.
+        '400':
+          description: Invalid input.
