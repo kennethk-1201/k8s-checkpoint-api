@@ -13,37 +13,37 @@ import (
 const port = "8080"
 const checkpoint_directory = "/checkpoint"
 
-func createCheckpoint(w http.ResponseWriter, r *http.Request) {
-}
-
-func getCheckpoint(w http.ResponseWriter, r *http.Request) {
-
-	vars := mux.Vars(r)
-
+func parseCheckpointArgs(vars map[string]string) (string, string, string, bool) {
 	namespace, ok := vars["namespace"]
 	if !ok {
-		w.WriteHeader(http.StatusNotFound)
-		return
+		return "", "", "", false
 	}
 
 	pod, ok := vars["pod"]
 	if !ok {
-		w.WriteHeader(http.StatusNotFound)
-		return
+		return "", "", "", false
 	}
 
 	container, ok := vars["container"]
 	if !ok {
-		w.WriteHeader(http.StatusNotFound)
+		return "", "", "", false
+	}
+
+	return namespace, pod, container, true
+}
+
+func getCheckpoint(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	namespace, pod, container, ok := parseCheckpointArgs(vars)
+	if !ok {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
 	path := fmt.Sprintf("%s/%s/%s/%s", checkpoint_directory, namespace, pod, container)
-
 	fileBytes, err := os.ReadFile(path)
-
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
@@ -51,15 +51,11 @@ func getCheckpoint(w http.ResponseWriter, r *http.Request) {
 	w.Write(fileBytes)
 }
 
-func deleteCheckpoint(w http.ResponseWriter, r *http.Request) {
-}
-
 func initRoutes() http.Handler {
 	r := mux.NewRouter()
 
+	// TO DO: Add create and delete checkpoint endpoints.
 	r.HandleFunc("/checkpoint/{namespace}/{pod}/{container}", getCheckpoint).Methods("GET")
-	r.HandleFunc("/checkpoint", createCheckpoint).Methods("POST")
-	r.HandleFunc("/checkpoint", deleteCheckpoint).Methods("DELETE")
 
 	return r
 }
