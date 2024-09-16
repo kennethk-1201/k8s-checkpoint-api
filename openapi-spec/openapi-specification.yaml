@@ -46,7 +46,6 @@ paths:
 
     post:
       summary: Checkpoints a container
-      description: Creates a new user with the provided data.
       requestBody:
         required: true
         content:
@@ -76,3 +75,27 @@ paths:
           description: Container was checkpointed.
         '400':
           description: Invalid input.
+    delete:
+      summary: Deletes a checkpoint
+      parameters:
+      - name: namespace
+        in: path
+        description: Namespace of the Pod.
+        required: true
+        schema:
+          type: string
+      - name: pod
+        in: path
+        description: Name of the Pod.
+        required: true
+        schema:
+          type: string
+      - name: container
+        in: path
+        description: Name of the container image.
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Checkpoint was deleted.
