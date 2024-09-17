@@ -15,7 +15,7 @@ spec:
       # Note that control plane nodes will not run the pods. (no reason, we can change it in the future)
       containers:
       - name: checkpoint-api
-        image: ghcr.io/kennethk-1201/k8s-checkpoint-api@sha256:495a06b5d4ae5049920919cfba999976a0cad36f8a9482d4d57e3701f924fa38
+        image: ghcr.io/kennethk-1201/k8s-checkpoint-api:main
         resources:
           requests:
             cpu: 100m
