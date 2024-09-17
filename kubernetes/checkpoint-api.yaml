@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: criu-proxy
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      name: criu-proxy
+  template:
+    metadata:
+      labels:
+        name: criu-proxy
+    spec:
+      # Note that control plane nodes will not run the pods. (no reason, we can change it in the future)
+      containers:
+      - name: checkpoint-api
+        image: ghcr.io/kennethk-1201/k8s-checkpoint-api/k8s-checkpoint-api:1.0 # this is a placeholder image, can be any other thing
+        resources:
+          requests:
+            cpu: 100m
+            memory: 200Mi
+        volumeMounts:
+        - name: checkpoints
+          mountPath: /checkpoints
+      # it may be desirable to set a high priority class to ensure that a DaemonSet Pod
+      # preempts running Pods
+      # priorityClassName: important
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: checkpoints
+        hostPath:
+          path: /var/lib/kubelet/checkpoints
