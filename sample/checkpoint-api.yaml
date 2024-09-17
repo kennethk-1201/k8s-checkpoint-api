@@ -1,21 +1,21 @@
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: criu-proxy
+  name: checkpoint-api
   namespace: kube-system
 spec:
   selector:
     matchLabels:
-      name: criu-proxy
+      name: checkpoint-api
   template:
     metadata:
       labels:
-        name: criu-proxy
+        name: checkpoint-api
     spec:
       # Note that control plane nodes will not run the pods. (no reason, we can change it in the future)
       containers:
       - name: checkpoint-api
-        image: ghcr.io/kennethk-1201/k8s-checkpoint-api/k8s-checkpoint-api:1.0 # this is a placeholder image, can be any other thing
+        image: ghcr.io/kennethk-1201/k8s-checkpoint-api@sha256:495a06b5d4ae5049920919cfba999976a0cad36f8a9482d4d57e3701f924fa38
         resources:
           requests:
             cpu: 100m
