@@ -13,34 +13,57 @@ import (
 const port = "8080"
 const checkpoint_directory = "/checkpoint"
 
-func parseCheckpointArgs(vars map[string]string) (string, string, string, bool) {
+// Running pods on the node.
+type RunningPodsResponse struct {
+	Kind       string  `json:"kind"`
+	ApiVersion string  `json:"apiVersion"`
+	Metadata   string  `json:"metadata"`
+	Items      PodList `json:"items"`
+}
+
+type PodList []Pod
+
+type Pod struct {
+	Metadata PodMetadata `json:"metadata"`
+	Spec     PodSpec     `json:"spec"`
+}
+
+type PodMetadata struct {
+	Name      string `json:"name"`
+	Namespace string `json:"namespace"`
+}
+
+type PodSpec struct {
+	Containers string `json:"containers"`
+}
+
+type Container struct {
+	Name  string `json:"name"`
+	Image string `json:"image"`
+}
+
+func parseCheckpointArgs(vars map[string]string) (string, string, bool) {
 	namespace, ok := vars["namespace"]
 	if !ok {
-		return "", "", "", false
+		return "", "", false
 	}
 
 	pod, ok := vars["pod"]
 	if !ok {
-		return "", "", "", false
+		return "", "", false
 	}
-
-	container, ok := vars["container"]
-	if !ok {
-		return "", "", "", false
-	}
-
-	return namespace, pod, container, true
+	return namespace, pod, true
 }
 
 func getCheckpoint(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	namespace, pod, container, ok := parseCheckpointArgs(vars)
+	namespace, pod, ok := parseCheckpointArgs(vars)
 	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	path := fmt.Sprintf("%s/%s/%s/%s", checkpoint_directory, namespace, pod, container)
+	path := fmt.Sprintf("%s/checkpoint-%s_%s-%s", checkpoint_directory, pod, namespace, container)
 	fileBytes, err := os.ReadFile(path)
 	if err != nil {
 		w.WriteHeader(http.StatusNotFound)
@@ -51,11 +74,20 @@ func getCheckpoint(w http.ResponseWriter, r *http.Request) {
 	w.Write(fileBytes)
 }
 
+func checkpointPod(w http.ResponseWriter, r *http.Request) string {
+	return ""
+}
+
+func getPodSpecs() {
+
+}
+
 func initRoutes() http.Handler {
 	r := mux.NewRouter()
 
 	// TO DO: Add create and delete checkpoint endpoints.
-	r.HandleFunc("/checkpoint/{namespace}/{pod}/{container}", getCheckpoint).Methods("GET")
+	r.HandleFunc("/checkpoint/{namespace}/{pod}", getCheckpoint).Methods("GET")
+	r.HandleFunc("/checkpoint/{namespace}/{pod}", checkpointPod).Methods("POST")
 
 	return r
 }

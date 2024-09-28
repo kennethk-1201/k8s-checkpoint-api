@@ -1,0 +1,19 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: checkpoint-clusterrole
+  namespace: kube-system
+rules:
+- apiGroups: [""]
+  resources:
+  - nodes/log
+  - nodes/metrics
+  - nodes/proxy
+  - nodes/spec
+  - nodes/stats
+  - nodes/pods
+  - nodes/checkpoint
+  - nodes/runningpods
+  verbs:
+  - 'get'
+  - 'post'

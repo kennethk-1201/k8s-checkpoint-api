@@ -53,6 +53,9 @@ paths:
             schema:
               type: object
               properties:
+                tag:
+                  type: string
+                  example: kenneth-container:1.0
                 namespace:
                   type: string
                   example: kenneth
