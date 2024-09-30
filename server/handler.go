@@ -48,7 +48,7 @@ func handleRetrieveCheckpoint(w http.ResponseWriter, r *http.Request) {
 
 	_, err := getPodSpec(req.Pod, req.Namespace)
 	if err != nil {
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -59,14 +59,14 @@ func handleGetCheckpoint(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	namespace, pod, ok := parseCheckpointArgs(vars)
 	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
+		http.Error(w, "invalid request params", http.StatusBadRequest)
 		return
 	}
 
 	path := fmt.Sprintf("%s/checkpoint_%s_%s", CHECKPOINT_PATH, pod, namespace)
 	fileBytes, err := os.ReadFile(path)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
+		http.Error(w, "checkpoint archive does not exist", http.StatusNotFound)
 		return
 	}
 
