@@ -91,14 +91,23 @@ func checkpointPod(podName string, namespace string) error {
 		FieldSelector: "metadata.name=" + podName,
 	})
 
-	// just use the first pod and first container
+	if err != nil {
+		return err
+	}
+
+	// temporary solution: use first pod and first container
 	pod := query.Items[0]
 	container := pod.Spec.Containers[0]
 	node := pod.Spec.NodeName
 
-	_, err = checkpointContainer(node, namespace, pod.Name, container.Name)
+	resp, err := checkpointContainer(node, namespace, pod.Name, container.Name)
+	if err != nil {
+		return err
+	}
 
-	return err
+	// rename archive to a more readable format for our use case
+	newCheckpointPath := fmt.Sprintf("/checkpoints/checkpoint_%s_%s.tar", podName, namespace)
+	return os.Rename(resp.Items[0], newCheckpointPath)
 }
 
 // Call kubelet API to checkpoint the given container
