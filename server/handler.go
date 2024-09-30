@@ -26,7 +26,7 @@ type CheckpointRequest struct {
 }
 
 type GenericResponse struct {
-	Msgs string `json:"msg"`
+	Msg string `json:"msg"`
 }
 
 type CheckpointContainerResponse struct {
@@ -81,7 +81,7 @@ func handleCreateCheckpoint(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(GenericResponse{
-		Msg: fmt.Sprint("checkpoint for pod %s in namespace %s was successfully created", req.Pod, req.Namespace)
+		Msg: fmt.Sprint("checkpoint for pod %s in namespace %s was successfully created", req.Pod, req.Namespace),
 	})
 }
 
