@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -15,7 +14,7 @@ var client *http.Client
 var CERT_PATH = os.Getenv("CERT_PATH") // "/pki/ca.crt"
 
 func initHttpsClient() {
-	caCert, err := ioutil.ReadFile(CERT_PATH)
+	caCert, err := os.ReadFile(CERT_PATH)
 	if err != nil {
 		log.Fatalf("Failed to read CA certificate: %v", err)
 	}
