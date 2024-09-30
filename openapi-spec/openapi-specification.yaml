@@ -53,26 +53,12 @@ paths:
             schema:
               type: object
               properties:
-                tag:
-                  type: string
-                  example: kenneth-container:1.0
                 namespace:
                   type: string
                   example: kenneth
                 pod:
                   type: string
                   example: webserver
-                container:
-                  type: string
-                  example: nginx
-                timeout:
-                  type: string
-                  example: 
-                  description: >
-                    Timeout in seconds to wait until the checkpoint creation is finished. If zero or no timeout is 
-                    specified the default CRI timeout value will be used. Checkpoint creation time depends directly 
-                    on the used memory of the container. The more memory a container uses the more time is required 
-                    to create the corresponding checkpoint.
       responses:
         '200':
           description: Container was checkpointed.

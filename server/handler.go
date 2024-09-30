@@ -1,45 +1,36 @@
 package server
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
 	"time"
 
 	"github.com/gorilla/mux"
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const port = "8080"
-const checkpoint_directory = "/checkpoint"
+var PORT = os.Getenv("PORT")
+var CHECKPOINT_PATH = os.Getenv("CHECKPOINT_PATH") // "/checkpoint"
+var NODE_NAME = os.Getenv("NODE_NAME")
+var TOKEN = os.Getenv("TOKEN")
+var API_SERVER = os.Getenv("API_SERVER") // "https://kubernetes.default.svc.cluster.local"
 
-// Running pods on the node.
-type RunningPodsResponse struct {
-	Kind       string  `json:"kind"`
-	ApiVersion string  `json:"apiVersion"`
-	Metadata   string  `json:"metadata"`
-	Items      PodList `json:"items"`
-}
-
-type PodList []Pod
-
-type Pod struct {
-	Metadata PodMetadata `json:"metadata"`
-	Spec     PodSpec     `json:"spec"`
-}
-
-type PodMetadata struct {
-	Name      string `json:"name"`
+type CheckpointRequest struct {
 	Namespace string `json:"namespace"`
+	Pod       string `json:"pod"`
 }
 
-type PodSpec struct {
-	Containers string `json:"containers"`
+type GenericResponse struct {
+	Msgs string `json:"msg"`
 }
 
-type Container struct {
-	Name  string `json:"name"`
-	Image string `json:"image"`
+type CheckpointContainerResponse struct {
+	Items []string `json:"items"`
 }
 
 func parseCheckpointArgs(vars map[string]string) (string, string, bool) {
@@ -55,53 +46,113 @@ func parseCheckpointArgs(vars map[string]string) (string, string, bool) {
 	return namespace, pod, true
 }
 
-func getCheckpoint(w http.ResponseWriter, r *http.Request) {
-	vars := mux.Vars(r)
-	namespace, pod, ok := parseCheckpointArgs(vars)
-	if !ok {
-		w.WriteHeader(http.StatusBadRequest)
+func handleGetCheckpoint(w http.ResponseWriter, r *http.Request) {
+
+	// vars := mux.Vars(r)
+	// namespace, pod, ok := parseCheckpointArgs(vars)
+	// if !ok {
+	// 	w.WriteHeader(http.StatusBadRequest)
+	// 	return
+	// }
+
+	// path := fmt.Sprintf("%s/checkpoint-%s_%s-%s", CHECKPOINT_PATH, pod, namespace, container)
+	// fileBytes, err := os.ReadFile(path)
+	// if err != nil {
+	// 	w.WriteHeader(http.StatusNotFound)
+	// 	return
+	// }
+
+	// w.Header().Set("Content-Type", "application/octet-stream")
+	// w.Write(fileBytes)
+}
+
+func handleCreateCheckpoint(w http.ResponseWriter, r *http.Request) {
+	var req CheckpointRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	path := fmt.Sprintf("%s/checkpoint-%s_%s-%s", checkpoint_directory, pod, namespace, container)
-	fileBytes, err := os.ReadFile(path)
+	if err := checkpointPod(req.Pod, req.Namespace); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(GenericResponse{
+		Msg: fmt.Sprint("checkpoint for pod %s in namespace %s was successfully created", req.Pod, req.Namespace)
+	})
+}
+
+// Checkpoint a given Pod. Should replace with custom logic in the future.
+func checkpointPod(podName string, namespace string) error {
+	query, err := clientSet.CoreV1().Pods(namespace).List(context.Background(), v1.ListOptions{
+		FieldSelector: "metadata.name=" + podName,
+	})
+
+	// just use the first pod and first container
+	pod := query.Items[0]
+	container := pod.Spec.Containers[0]
+	node := pod.Spec.NodeName
+
+	_, err = checkpointContainer(node, namespace, pod.Name, container.Name)
+
+	return err
+}
+
+// Call kubelet API to checkpoint the given container
+func checkpointContainer(node string, namespace string, pod string, container string) (*CheckpointContainerResponse, error) {
+	endpoint := fmt.Sprintf("%s/api/v1/nodes/%s/proxy/checkpoint/%s/%s/%s", API_SERVER, node, namespace, pod, container)
+	req, err := http.NewRequest("POST", endpoint, nil)
 	if err != nil {
-		w.WriteHeader(http.StatusNotFound)
-		return
+		return nil, err
 	}
 
-	w.Header().Set("Content-Type", "application/octet-stream")
-	w.Write(fileBytes)
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", TOKEN))
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	bytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var result *CheckpointContainerResponse
+	if err := json.Unmarshal(bytes, result); err != nil {
+		return nil, err
+	}
+
+	return result, nil
 }
 
-func checkpointPod(w http.ResponseWriter, r *http.Request) string {
-	return ""
-}
-
-func getPodSpecs() {
-
-}
-
-func initRoutes() http.Handler {
+func getRoutes() http.Handler {
 	r := mux.NewRouter()
 
 	// TO DO: Add create and delete checkpoint endpoints.
-	r.HandleFunc("/checkpoint/{namespace}/{pod}", getCheckpoint).Methods("GET")
-	r.HandleFunc("/checkpoint/{namespace}/{pod}", checkpointPod).Methods("POST")
+	r.HandleFunc("/checkpoint/{namespace}/{pod}", handleGetCheckpoint).Methods("GET")
+	r.HandleFunc("/checkpoint/{namespace}/{pod}", handleCreateCheckpoint).Methods("POST")
 
 	return r
 }
 
 func Init() {
+	initHttpsClient()
+	initKubernetesClient()
+
 	s := &http.Server{
-		Handler: initRoutes(),
-		Addr:    fmt.Sprintf(":%s", port),
+		Handler: getRoutes(),
+		Addr:    fmt.Sprintf(":%s", PORT),
 		// Handler:        myHandler,
 		ReadTimeout:    10 * time.Second,
 		WriteTimeout:   10 * time.Second,
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	log.Printf("Starting server on port %s\n", port)
+	log.Printf("Starting server on port %s\n", PORT)
 	log.Fatal(s.ListenAndServe())
 }
