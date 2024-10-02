@@ -10,6 +10,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/containers/buildah"
 	"github.com/gorilla/mux"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,6 +18,7 @@ import (
 
 var PORT = os.Getenv("PORT")
 var CHECKPOINT_PATH = os.Getenv("CHECKPOINT_PATH") // "/checkpoint"
+var RESTORE_PATH = os.Getenv("RESTORE_PATH")       // "/restore"
 var TOKEN = os.Getenv("TOKEN")
 var API_SERVER = os.Getenv("API_SERVER") // "https://kubernetes.default.svc.cluster.local"
 
@@ -25,7 +27,7 @@ type CreateCheckpointRequest struct {
 	Pod       string `json:"pod"`
 }
 
-type RetrieveCheckpointRequest struct {
+type RestoreCheckpointRequest struct {
 	Namespace string `json:"namespace"`
 	Pod       string `json:"pod"`
 }
@@ -39,22 +41,68 @@ type CheckpointContainerResponse struct {
 }
 
 // Retrieve checkpoint archive from another node
-func handleRetrieveCheckpoint(w http.ResponseWriter, r *http.Request) {
-	var req RetrieveCheckpointRequest
+func handleRestoreCheckpoint(w http.ResponseWriter, r *http.Request) {
+	var req RestoreCheckpointRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
-	_, err := getPodSpec(req.Pod, req.Namespace)
+	pod, err := getPodSpec(req.Pod, req.Namespace)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// retrieve and store in somewhere? (eg. push to local registry)
+	endpoint := fmt.Sprintf("http://%s:3030/checkpoint/%s/%s", pod.Spec.NodeName, req.Namespace, req.Pod)
+
+	resp, err := http.Get(endpoint)
+
+	if err != nil {
+		http.Error(w, "unable to checkpoint", http.StatusBadRequest)
+		return
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusBadRequest {
+		http.Error(w, "invalid request params", http.StatusBadRequest)
+		return
+	}
+
+	if resp.StatusCode == http.StatusNotFound {
+		http.Error(w, "checkpoint archive does not exist", http.StatusBadRequest)
+		return
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		http.Error(w, "error retrieving checkpoint", http.StatusBadRequest)
+		return
+	}
+
+	restore_archive_path := fmt.Sprintf("%s/checkpoint_%s_%s.tar", RESTORE_PATH, pod, req.Namespace)
+	outFile, err := os.Create(restore_archive_path)
+
+	if err != nil {
+		http.Error(w, "error creating checkpoint file", http.StatusBadRequest)
+		return
+	}
+
+	_, err = io.Copy(outFile, resp.Body)
+	if err != nil {
+		http.Error(w, "error storing checkpoint", http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(GenericResponse{
+		Msg: fmt.Sprintf("checkpoint for pod %s in namespace %s was successfully migrated to %s", req.Pod, req.Namespace, pod.Spec.NodeName),
+	})
 }
 
+// Endpoint for client to retrieve a checkpoint archive (should add authentication in the future)
 func handleGetCheckpoint(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	namespace, pod, ok := parseCheckpointArgs(vars)
@@ -174,7 +222,7 @@ func getRoutes() http.Handler {
 	// TO DO: Add create and delete checkpoint endpoints.
 	r.HandleFunc("/checkpoint/{namespace}/{pod}", handleGetCheckpoint).Methods("GET")
 	r.HandleFunc("/checkpoint/{namespace}/{pod}", handleCreateCheckpoint).Methods("POST")
-	r.HandleFunc("/retrieve/{namespace}/{pod}", handleRetrieveCheckpoint).Methods("POST")
+	r.HandleFunc("/retrieve/{namespace}/{pod}", handleRestoreCheckpoint).Methods("POST")
 
 	return r
 }
@@ -182,6 +230,9 @@ func getRoutes() http.Handler {
 func Init() {
 	initHttpsClient()
 	initKubernetesClient()
+	if buildah.InitReexec() {
+		return
+	}
 
 	s := &http.Server{
 		Handler: getRoutes(),
